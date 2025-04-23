@@ -8,7 +8,9 @@ import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.lifecycle.ViewModelProvider
 import com.example.routetracker.databinding.ActivityMapsBinding
+import com.example.routetracker.viewmodel.TrackingViewModel
 import com.google.android.gms.location.*
 import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.*
@@ -20,6 +22,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var binding: ActivityMapsBinding
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
+    private lateinit var trackingViewModel: TrackingViewModel
     private var currentLocationMarker: Marker? = null
     private var isTrackingEnabled = true
 
@@ -27,6 +30,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        trackingViewModel = ViewModelProvider(this).get(TrackingViewModel::class.java)
+        trackingViewModel.pathPoints.observe(this) { points ->
+            updatePolyline(points)
+        }
         binding = ActivityMapsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -70,8 +77,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     Log.d("MAP", "🚶 模拟移动到：$point")
 
                     // 更新路径与标记
-                    pathPoints.add(point)
-                    updatePolyline()
+                    trackingViewModel.addPoint(point)
                     updateLocationMarker(point)
                     mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(point, 16f))
 
@@ -108,8 +114,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun hasLocationPermissions(): Boolean {
-        val fine = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-        val coarse = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        val fine =
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarse =
+            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
         Log.d("MAP", "权限检查 -> Fine: $fine, Coarse: $coarse")
         return fine == PackageManager.PERMISSION_GRANTED && coarse == PackageManager.PERMISSION_GRANTED
     }
@@ -136,7 +144,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
 
             // 检查位置服务是否开启
-            val locationManager = getSystemService(LOCATION_SERVICE) as android.location.LocationManager
+            val locationManager =
+                getSystemService(LOCATION_SERVICE) as android.location.LocationManager
             if (!locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
                 Log.e("MAP", "GPS未开启")
                 Toast.makeText(this, "请开启GPS定位服务", Toast.LENGTH_LONG).show()
@@ -170,11 +179,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                             mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16f))
                         }
 
-                        pathPoints.add(latLng)
-                        updatePolyline()
+                        trackingViewModel.addPoint(latLng)
                     } else {
                         Log.e("MAP", "⚠️ 位置为 null")
-                        Toast.makeText(this@MapsActivity, "无法获取位置信息", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MapsActivity, "无法获取位置信息", Toast.LENGTH_SHORT)
+                            .show()
                     }
                 }
             }
@@ -206,7 +215,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         val networkLocationRequest = LocationRequest.Builder(
                             Priority.PRIORITY_BALANCED_POWER_ACCURACY, 5000L
                         ).build()
-                        
+
                         fusedLocationClient.requestLocationUpdates(
                             networkLocationRequest,
                             object : LocationCallback() {
@@ -216,7 +225,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                                         val latLng = LatLng(location.latitude, location.longitude)
                                         Log.d("MAP", "📍 网络定位成功：$latLng")
                                         updateLocationMarker(latLng)
-                                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16f))
+                                        mMap.animateCamera(
+                                            CameraUpdateFactory.newLatLngZoom(
+                                                latLng,
+                                                16f
+                                            )
+                                        )
                                         fusedLocationClient.removeLocationUpdates(this)
                                     }
                                 }
@@ -251,7 +265,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-    private fun updatePolyline() {
+    private fun updatePolyline(points: List<LatLng>) {
         polyline?.remove()
         if (pathPoints.size > 1) {
             polyline = mMap.addPolyline(
@@ -306,8 +320,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         val latLng = LatLng(location.latitude, location.longitude)
                         updateLocationMarker(latLng)
                         mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16f))
-                        pathPoints.add(latLng)
-                        updatePolyline()
+                        trackingViewModel.addPoint(latLng)
                     } else {
                         Log.d("MAP", "⚠️ 单次定位返回 null")
                     }
